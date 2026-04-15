@@ -113,11 +113,14 @@
     <!-- BAŞARI MODALI -->
     <div id="customModal" class="fixed inset-0 bg-slate-900/60 z-[9000] hidden items-center justify-center p-4 backdrop-blur-md">
         <div class="bg-white rounded-[2.5rem] max-w-md w-full p-8 shadow-2xl text-center">
-            <h3 id="modalTitle" class="text-2xl font-black mb-2 text-slate-900">Upload Successful</h3>
+            <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="check-circle" class="w-10 h-10"></i>
+            </div>
+            <h3 id="modalTitle" class="text-2xl font-black mb-2 text-slate-900">Yükleme Başarılı</h3>
             <p id="modalMessage" class="text-slate-500 mb-6 font-medium text-sm"></p>
             
             <div id="qrSection" class="hidden mb-6 p-6 bg-slate-50 rounded-[1.5rem] border border-slate-100 flex flex-col items-center">
-                <div id="qrContainer" class="flex justify-center mb-1"></div>
+                <div id="qrContainer" class="flex justify-center mb-1 bg-white p-2 rounded-xl shadow-sm"></div>
                 <p id="qrTitleText" class="font-black text-[#000080] text-[11px] uppercase tracking-tighter mb-4"></p>
                 
                 <div class="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl mb-4 overflow-hidden">
@@ -125,11 +128,11 @@
                 </div>
                 
                 <button id="downloadQrBtn" class="w-full py-4 bg-white border border-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-3 hover:bg-slate-100 transition-all">
-                    <i data-lucide="download" class="w-4 h-4"></i> Download QR Code
+                    <i data-lucide="download" class="w-4 h-4"></i> QR Kodunu İndir
                 </button>
             </div>
             
-            <button id="modalClose" class="w-full py-5 bg-[#000080] text-white rounded-[1.2rem] font-black shadow-lg hover:bg-blue-900 active:scale-95 transition-all uppercase tracking-widest">Close</button>
+            <button id="modalClose" class="w-full py-5 bg-[#000080] text-white rounded-[1.2rem] font-black shadow-lg hover:bg-blue-900 active:scale-95 transition-all uppercase tracking-widest">KAPAT</button>
         </div>
     </div>
 
@@ -165,7 +168,6 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <!-- Editör Sol Taraf -->
             <div class="lg:col-span-8 space-y-6">
                 <div class="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm">
                     <div class="flex border-b border-slate-100 mb-8 gap-10">
@@ -257,7 +259,6 @@
     <script>
         // --- ONEDRIVE AYARLARI ---
         const CLIENT_ID = "1fec7a90-0661-485d-9877-ec7f5c73b39a"; 
-
         const currentUri = window.location.origin + window.location.pathname;
 
         const msalConfig = {
@@ -270,7 +271,6 @@
 
         const msalInstance = new msal.PublicClientApplication(msalConfig);
         let msalInitialized = false;
-
         const SCOPES = ["Files.ReadWrite.All"];
 
         // --- GLOBAL DURUM ---
@@ -306,6 +306,8 @@
             loading: document.getElementById('loading'),
             loadingText: document.getElementById('loadingText'),
             customModal: document.getElementById('customModal'),
+            modalTitle: document.getElementById('modalTitle'), // EKLENDİ
+            modalMessage: document.getElementById('modalMessage'), // EKLENDİ
             cropModal: document.getElementById('cropModal'),
             cropModalImage: document.getElementById('cropModalImage'),
             qrSection: document.getElementById('qrSection'),
@@ -545,6 +547,7 @@
         els.exportOneDriveBtn.onclick = async () => {
             els.loadingText.innerText = "OneDrive'a Kaydediliyor..."; 
             els.loading.classList.remove('hidden');
+            
             try {
                 const token = await getAccessToken();
                 const blob = await createPdfBlob();
@@ -552,42 +555,52 @@
                 const sopTitle = (els.sopTitleInput.value || "SOP DOCUMENT").toUpperCase();
                 const fileName = `SOP_${sopTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
                 
-                const url = `https://graph.microsoft.com/v1.0/me/drive/root:/${folder}/${fileName}:/content`;
-
-                const res = await fetch(url, { 
+                // 1. DOSYAYI YÜKLE
+                const uploadUrl = `https://graph.microsoft.com/v1.0/me/drive/root:/${folder}/${fileName}:/content`;
+                const uploadRes = await fetch(uploadUrl, { 
                     method: 'PUT', 
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/pdf' }, 
                     body: blob 
                 });
                 
-                const data = await res.json();
-                
+                if (!uploadRes.ok) throw new Error("Dosya yüklenemedi.");
+                const uploadData = await uploadRes.json();
+                const itemId = uploadData.id;
+
+                // 2. PAYLAŞIM LİNKİ OLUŞTUR (Herkes için görüntüleme linki)
+                els.loadingText.innerText = "Paylaşım Bağlantısı Oluşturuluyor...";
+                const shareUrl = `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}/createLink`;
+                const shareRes = await fetch(shareUrl, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: "view", scope: "anonymous" })
+                });
+
+                const shareData = await shareRes.json();
+                const finalUrl = shareData.link.webUrl;
+
                 // Yükleme ekranını kapat
                 els.loading.classList.add('hidden');
 
-                if (res.ok) {
-                    // Modal bilgilerini hazırla
-                    els.modalTitle.innerText = "Upload Successful";
-                    els.modalMessage.innerText = `Document moved to '${folder}' folder.`;
-                    els.qrLinkText.innerText = data.webUrl;
-                    els.qrTitleText.innerText = sopTitle;
+                // MODAL GÖSTERİMİ
+                els.modalTitle.innerText = "Yükleme Başarılı";
+                els.modalMessage.innerText = `SOP dökümanı '${folder}' klasörüne kaydedildi.`;
+                els.qrLinkText.innerText = finalUrl;
+                els.qrTitleText.innerText = sopTitle;
+                
+                els.qrContainer.innerHTML = '';
+                els.qrSection.classList.remove('hidden');
+                
+                // QR Kod oluşturma
+                setTimeout(() => {
+                    new QRCode(els.qrContainer, { text: finalUrl, width: 180, height: 180, colorDark: "#000080" });
+                    els.customModal.classList.remove('hidden'); 
+                    els.customModal.classList.add('flex');
+                }, 100);
                     
-                    // QR alanı temizle ve render et
-                    els.qrContainer.innerHTML = '';
-                    els.qrSection.classList.remove('hidden');
-                    
-                    // QR Kod oluşturma (Kısa bir gecikmeyle render et ki DOM hazır olsun)
-                    setTimeout(() => {
-                        new QRCode(els.qrContainer, { text: data.webUrl, width: 180, height: 180, colorDark: "#000080" });
-                        els.customModal.classList.remove('hidden'); 
-                        els.customModal.classList.add('flex');
-                    }, 50);
-                    
-                } else { 
-                    throw new Error(data.error?.message || "Upload failed."); 
-                }
             } catch (err) { 
                 els.loading.classList.add('hidden'); 
+                console.error(err);
                 alert("OneDrive Hatası: " + err.message); 
             }
         };
