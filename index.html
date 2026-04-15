@@ -119,8 +119,8 @@
             <h3 id="modalTitle" class="text-3xl font-black mb-4 text-slate-900">Yükleme Tamam!</h3>
             <p id="modalMessage" class="text-slate-500 mb-8 font-medium"></p>
             <div id="qrSection" class="hidden mb-8 p-8 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
-                <div id="qrContainer" class="flex justify-center mb-4"></div>
-                <p id="qrTitleText" class="font-black text-[#000080] text-xs uppercase tracking-tighter mb-4"></p>
+                <div id="qrContainer" class="flex justify-center mb-6"></div>
+                <p id="qrTitleText" class="font-black text-[#000080] text-sm uppercase tracking-tighter mb-4"></p>
                 <button id="downloadQrBtn" class="w-full py-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold flex items-center justify-center gap-3 hover:bg-slate-100 transition-colors">
                     <i data-lucide="download" class="w-4 h-4"></i> QR Kodunu İndir
                 </button>
@@ -329,7 +329,6 @@
 
         const ctx = els.mainCanvas.getContext('2d');
 
-        // Giriş Mantığı
         els.loginForm.onsubmit = (e) => {
             e.preventDefault();
             if (document.getElementById('usernameInput').value === ADMIN_U && document.getElementById('passwordInput').value === ADMIN_P) {
@@ -339,7 +338,6 @@
             }
         };
 
-        // MSAL Başlatma
         async function initializeMsal() {
             if (!msalInitialized) {
                 await msalInstance.initialize();
@@ -347,7 +345,6 @@
             }
         }
 
-        // Tab ve Resim Yönetimi
         els.tabBtns.forEach((btn, idx) => {
             if (btn) {
                 btn.onclick = () => {
@@ -435,7 +432,6 @@
                 els.uploadArea.classList.add('hidden'); els.editorArea.classList.remove('hidden');
                 els.mainCanvas.width = 1200; els.mainCanvas.height = img.height * (1200 / img.width);
                 ctx.drawImage(img, 0, 0, 1200, els.mainCanvas.height);
-                window.arrows.forEach(a => { if (a.imgIdx === window.activeIdx) drawArrowHead(ctx, (a.x1/100)*1200, (a.y1/100)*els.mainCanvas.height, (a.x2/100)*w, (a.y2/100)*h, a.color); });
                 window.arrows.forEach(a => { if (a.imgIdx === window.activeIdx) drawArrowHead(ctx, (a.x1/100)*1200, (a.y1/100)*els.mainCanvas.height, (a.x2/100)*1200, (a.y2/100)*els.mainCanvas.height, a.color); });
                 if (window.tempArrowStart && window.currentMode === 'arrow') drawArrowHead(ctx, (window.tempArrowStart.px/100)*1200, (window.tempArrowStart.py/100)*els.mainCanvas.height, window.mousePos.x, window.mousePos.y, getColorByType(window.lastColor || 'red'));
             } else { els.uploadArea.classList.remove('hidden'); els.editorArea.classList.add('hidden'); }
@@ -538,7 +534,8 @@
         }
 
         els.exportOneDriveBtn.onclick = async () => {
-            els.loadingText.innerText = "OneDrive'a Kaydediliyor..."; els.loading.classList.remove('hidden');
+            els.loadingText.innerText = "OneDrive'a Kaydediliyor..."; 
+            els.loading.classList.remove('hidden');
             try {
                 const token = await getAccessToken();
                 const blob = await createPdfBlob();
@@ -554,16 +551,20 @@
                 });
                 
                 const data = await res.json();
-                els.loading.classList.add('hidden');
                 
                 if (res.ok) {
-                    els.modalMessage.innerText = `Döküman OneDrive '${folder}' klasörüne yüklendi.`;
+                    els.loading.classList.add('hidden');
+                    els.modalMessage.innerText = `Döküman OneDrive '${folder}' klasörüne başarıyla yüklendi.`;
                     els.qrSection.classList.remove('hidden'); 
                     els.qrContainer.innerHTML = '';
-                    new QRCode(els.qrContainer, { text: data.webUrl, width: 160, height: 160, colorDark: "#000080" });
-                    els.qrTitleText.innerText = sopTitle.toUpperCase();
-                    els.customModal.classList.remove('hidden'); 
-                    els.customModal.classList.add('flex');
+                    
+                    // QR Kod oluşturma
+                    setTimeout(() => {
+                        new QRCode(els.qrContainer, { text: data.webUrl, width: 160, height: 160, colorDark: "#000080" });
+                        els.qrTitleText.innerText = sopTitle.toUpperCase();
+                        els.customModal.classList.remove('hidden'); 
+                        els.customModal.classList.add('flex');
+                    }, 100);
                 } else { 
                     throw new Error(data.error?.message || "Yükleme sırasında hata oluştu."); 
                 }
@@ -583,22 +584,25 @@
             const dlCanvas = document.createElement('canvas');
             const dctx = dlCanvas.getContext('2d');
             
-            const qrWidth = 160, padding = 20, fontSize = 14;
-            dlCanvas.width = qrWidth + (padding * 2);
-            dlCanvas.height = qrWidth + (padding * 2) + fontSize + 10;
+            const qrSize = 250;
+            const padding = 40;
+            const textSpace = 60;
+            
+            dlCanvas.width = qrSize + (padding * 2);
+            dlCanvas.height = qrSize + padding + textSpace;
             
             // Beyaz arka plan
             dctx.fillStyle = 'white'; 
             dctx.fillRect(0, 0, dlCanvas.width, dlCanvas.height);
             
-            // QR Kodun çizilmesi
-            dctx.drawImage(qrSource, padding, padding, qrWidth, qrWidth);
+            // QR Kodun çizilmesi (Orantılı ölçeklendirme)
+            dctx.drawImage(qrSource, padding, padding, qrSize, qrSize);
             
             // SOP Başlığının eklenmesi
             dctx.fillStyle = '#000080'; 
-            dctx.font = `bold ${fontSize}px Inter, sans-serif`; 
+            dctx.font = `bold 20px Inter, sans-serif`; 
             dctx.textAlign = 'center';
-            dctx.fillText(sopTitleDisplay, dlCanvas.width / 2, padding + qrWidth + 25);
+            dctx.fillText(sopTitleDisplay, dlCanvas.width / 2, padding + qrSize + 35);
             
             const a = document.createElement('a');
             a.href = dlCanvas.toDataURL("image/png");
@@ -644,7 +648,10 @@
             }
         });
 
-        document.getElementById('modalClose').onclick = () => { els.customModal.classList.add('hidden'); els.customModal.classList.remove('flex'); };
+        document.getElementById('modalClose').onclick = () => { 
+            els.customModal.classList.add('hidden'); 
+            els.customModal.classList.remove('flex'); 
+        };
         window.onload = () => lucide.createIcons();
     </script>
 </body>
