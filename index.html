@@ -110,10 +110,10 @@
         </div>
     </div>
 
-    <!-- BAŞARI MODALI (OneDrive için güncellendi) -->
+    <!-- BAŞARI MODALI -->
     <div id="customModal" class="fixed inset-0 bg-slate-900/60 z-[9000] hidden items-center justify-center p-4 backdrop-blur-md">
-        <div class="bg-white rounded-[2rem] max-w-md w-full p-8 shadow-2xl text-center">
-            <h3 id="modalTitle" class="text-3xl font-black mb-2 text-slate-900">Upload Successful</h3>
+        <div class="bg-white rounded-[2.5rem] max-w-md w-full p-8 shadow-2xl text-center">
+            <h3 id="modalTitle" class="text-2xl font-black mb-2 text-slate-900">Upload Successful</h3>
             <p id="modalMessage" class="text-slate-500 mb-6 font-medium text-sm"></p>
             
             <div id="qrSection" class="hidden mb-6 p-6 bg-slate-50 rounded-[1.5rem] border border-slate-100 flex flex-col items-center">
@@ -332,6 +332,7 @@
 
         const ctx = els.mainCanvas.getContext('2d');
 
+        // Giriş Mantığı
         els.loginForm.onsubmit = (e) => {
             e.preventDefault();
             if (document.getElementById('usernameInput').value === ADMIN_U && document.getElementById('passwordInput').value === ADMIN_P) {
@@ -341,6 +342,7 @@
             }
         };
 
+        // MSAL Başlatma
         async function initializeMsal() {
             if (!msalInitialized) {
                 await msalInstance.initialize();
@@ -348,6 +350,7 @@
             }
         }
 
+        // Tab ve Resim Yönetimi
         els.tabBtns.forEach((btn, idx) => {
             if (btn) {
                 btn.onclick = () => {
@@ -431,12 +434,15 @@
 
         function renderAll() {
             const img = window.images[window.activeIdx];
+            const w = 1200;
+            const h = img ? img.height * (1200 / img.width) : 0;
+            
             if (img) {
                 els.uploadArea.classList.add('hidden'); els.editorArea.classList.remove('hidden');
-                els.mainCanvas.width = 1200; els.mainCanvas.height = img.height * (1200 / img.width);
-                ctx.drawImage(img, 0, 0, 1200, els.mainCanvas.height);
-                window.arrows.forEach(a => { if (a.imgIdx === window.activeIdx) drawArrowHead(ctx, (a.x1/100)*1200, (a.y1/100)*els.mainCanvas.height, (a.x2/100)*1200, (a.y2/100)*els.mainCanvas.height, a.color); });
-                if (window.tempArrowStart && window.currentMode === 'arrow') drawArrowHead(ctx, (window.tempArrowStart.px/100)*1200, (window.tempArrowStart.py/100)*els.mainCanvas.height, window.mousePos.x, window.mousePos.y, getColorByType(window.lastColor || 'red'));
+                els.mainCanvas.width = w; els.mainCanvas.height = h;
+                ctx.drawImage(img, 0, 0, w, h);
+                window.arrows.forEach(a => { if (a.imgIdx === window.activeIdx) drawArrowHead(ctx, (a.x1/100)*w, (a.y1/100)*h, (a.x2/100)*w, (a.y2/100)*h, a.color); });
+                if (window.tempArrowStart && window.currentMode === 'arrow') drawArrowHead(ctx, (window.tempArrowStart.px/100)*w, (window.tempArrowStart.py/100)*h, window.mousePos.x, window.mousePos.y, getColorByType(window.lastColor || 'red'));
             } else { els.uploadArea.classList.remove('hidden'); els.editorArea.classList.add('hidden'); }
             
             els.markersOverlay.innerHTML = ''; els.tableBody.innerHTML = '';
@@ -536,7 +542,6 @@
             return pdf.output('blob');
         }
 
-        // --- ONEDRIVE YÜKLEME VE QR MODAL TETİKLEME ---
         els.exportOneDriveBtn.onclick = async () => {
             els.loadingText.innerText = "OneDrive'a Kaydediliyor..."; 
             els.loading.classList.remove('hidden');
@@ -544,10 +549,9 @@
                 const token = await getAccessToken();
                 const blob = await createPdfBlob();
                 const folder = els.sopSubtitleInput.value.trim() || "General SOP Projects";
-                const sopTitle = els.sopTitleInput.value || "SOP DOCUMENT";
+                const sopTitle = (els.sopTitleInput.value || "SOP DOCUMENT").toUpperCase();
                 const fileName = `SOP_${sopTitle.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
                 
-                // Klasör yapısıyla birlikte PUT isteği
                 const url = `https://graph.microsoft.com/v1.0/me/drive/root:/${folder}/${fileName}:/content`;
 
                 const res = await fetch(url, { 
@@ -558,25 +562,26 @@
                 
                 const data = await res.json();
                 
+                // Yükleme ekranını kapat
+                els.loading.classList.add('hidden');
+
                 if (res.ok) {
-                    els.loading.classList.add('hidden');
-                    
-                    // Modalı hazırla ve göster
+                    // Modal bilgilerini hazırla
                     els.modalTitle.innerText = "Upload Successful";
                     els.modalMessage.innerText = `Document moved to '${folder}' folder.`;
-                    els.qrSection.classList.remove('hidden'); 
-                    els.qrContainer.innerHTML = '';
-                    
-                    // Linki yerleştir
                     els.qrLinkText.innerText = data.webUrl;
+                    els.qrTitleText.innerText = sopTitle;
                     
-                    // QR Kodu oluştur (Kısa bir gecikmeyle render et)
+                    // QR alanı temizle ve render et
+                    els.qrContainer.innerHTML = '';
+                    els.qrSection.classList.remove('hidden');
+                    
+                    // QR Kod oluşturma (Kısa bir gecikmeyle render et ki DOM hazır olsun)
                     setTimeout(() => {
                         new QRCode(els.qrContainer, { text: data.webUrl, width: 180, height: 180, colorDark: "#000080" });
-                        els.qrTitleText.innerText = sopTitle.toUpperCase();
                         els.customModal.classList.remove('hidden'); 
                         els.customModal.classList.add('flex');
-                    }, 100);
+                    }, 50);
                     
                 } else { 
                     throw new Error(data.error?.message || "Upload failed."); 
@@ -587,7 +592,6 @@
             }
         };
 
-        // --- QR KOD İNDİRME FONKSİYONU ---
         els.downloadQrBtn.onclick = () => {
             const qrSource = els.qrContainer.querySelector('canvas') || els.qrContainer.querySelector('img');
             if (!qrSource) return;
@@ -598,22 +602,18 @@
             const dlCanvas = document.createElement('canvas');
             const dctx = dlCanvas.getContext('2d');
             
-            // Görsel boyutları (Paylaştığınız örneğe sadık kalarak)
             const qrSize = 300;
             const padding = 50;
-            const bottomSpace = 80;
+            const bottomSpace = 100;
             
             dlCanvas.width = qrSize + (padding * 2);
             dlCanvas.height = qrSize + padding + bottomSpace;
             
-            // Beyaz arka plan
             dctx.fillStyle = 'white'; 
             dctx.fillRect(0, 0, dlCanvas.width, dlCanvas.height);
             
-            // QR Kodun çizilmesi
             dctx.drawImage(qrSource, padding, padding, qrSize, qrSize);
             
-            // SOP Başlığının estetik olarak eklenmesi
             dctx.fillStyle = '#000080'; 
             dctx.font = `800 24px Inter, sans-serif`; 
             dctx.textAlign = 'center';
